@@ -64,8 +64,10 @@ def column_type(schema_property):
                 col_type = 'integer'
             elif schema_property['maximum'] <= 9223372036854775807:
                 col_type = 'bigint'
+            else:
+                col_type = 'numeric'  # max exceeds bigint => numeric (arbitrary precision)
         else:
-            col_type = 'numeric'
+            col_type = 'bigint'  # no max specified => bigint (per meltano SDK convention)
     elif 'boolean' in property_type:
         col_type = 'boolean'
 
