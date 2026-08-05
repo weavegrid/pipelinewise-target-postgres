@@ -67,8 +67,7 @@ def column_type(schema_property):
             else:
                 col_type = 'numeric'  # max exceeds bigint => numeric (arbitrary precision)
         else:
-            col_type = 'integer'  # HACK! to ensure smooth migration to meltanolabs tap
-            # col_type = 'bigint'  # no max specified => bigint (per meltano SDK convention)
+            col_type = 'bigint'  # no max specified => bigint (per meltano SDK convention)
     elif 'boolean' in property_type:
         col_type = 'boolean'
 
