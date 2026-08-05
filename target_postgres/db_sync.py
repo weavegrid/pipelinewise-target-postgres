@@ -76,6 +76,21 @@ def column_type(schema_property):
     return col_type
 
 
+# numeric column types ordered from narrowest to widest; migrating a column from
+# a narrower type to a wider one is a lossless, in-place operation in Postgres
+# via ALTER TABLE ... ALTER COLUMN ... TYPE, so should be supported
+_NUMERIC_TYPE_WIDENING_ORDER = ["smallint", "integer", "bigint", "numeric"]
+
+
+def is_safe_to_widen_type(old_type: str, new_type: str) -> bool:
+    try:
+        return (
+            _NUMERIC_TYPE_WIDENING_ORDER.index(new_type)
+            >= _NUMERIC_TYPE_WIDENING_ORDER.index(old_type)
+        )
+    except ValueError:
+        return False
+
 def safe_column_name(name):
     return '"{}"'.format(name).lower()
 
@@ -548,16 +563,27 @@ class DbSync:
         for column in columns_to_add:
             self.add_column(column, stream)
 
-        columns_to_replace = [
-            (safe_column_name(name), column_clause(
-                name,
-                properties_schema
-            ))
-            for (name, properties_schema) in self.flatten_schema.items()
-            if name.lower() in columns_dict and
-            columns_dict[name.lower()]['data_type'].lower() != column_type(properties_schema).lower()
-        ]
+        columns_to_widen = []
+        columns_to_replace = []
 
+        for (name, properties_schema) in self.flatten_schema.items():
+            if name.lower() not in columns_dict:
+                continue
+
+            old_type = columns_dict[name.lower()]['data_type'].lower()
+            new_type = column_type(properties_schema).lower()
+            if old_type == new_type:
+                continue
+
+            if is_safe_to_widen_type(old_type, new_type):
+                columns_to_widen.append((safe_column_name(name), new_type))
+            else:
+                columns_to_replace.append(
+                    (safe_column_name(name), column_clause(name, properties_schema))
+                )
+
+        for (column_name, new_type) in columns_to_widen:
+            self.widen_column(column_name, new_type, stream)
         for (column_name, column) in columns_to_replace:
             self.version_column(column_name, stream)
             self.add_column(column, stream)
@@ -566,6 +592,13 @@ class DbSync:
         drop_column = "ALTER TABLE {} DROP COLUMN {}".format(self.table_name(stream), column_name)
         self.logger.info('Dropping column: %s', drop_column)
         self.query(drop_column)
+
+    def widen_column(self, column_name, new_type, stream):
+        widen_column = "ALTER TABLE {} ALTER COLUMN {} TYPE {}".format(
+            self.table_name(stream), column_name, new_type
+        )
+        self.logger.info('Widening column type: %s', widen_column)
+        self.query(widen_column)
 
     def version_column(self, column_name, stream):
         version_column = "ALTER TABLE {} RENAME COLUMN {} TO \"{}_{}\"".format(self.table_name(stream, False),
