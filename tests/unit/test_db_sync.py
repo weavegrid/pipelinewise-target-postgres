@@ -81,7 +81,7 @@ class TestUnit(unittest.TestCase):
         self.assertEqual(mapper(json_smallint)     , 'smallint')
         self.assertEqual(mapper(json_int)          , 'integer')
         self.assertEqual(mapper(json_bigint)       , 'bigint')
-        self.assertEqual(mapper(json_nobound_int)  , 'numeric')
+        self.assertEqual(mapper(json_nobound_int)  , 'bigint')
         self.assertEqual(mapper(json_int_or_str)   , 'character varying')
         self.assertEqual(mapper(json_bool)         , 'boolean')
         self.assertEqual(mapper(json_obj)          , 'jsonb')
